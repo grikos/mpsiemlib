@@ -32,6 +32,8 @@ class Incidents(ModuleInterface, LoggingHandler):
     __api_incident_netfor_sessions = "/api/incidents/{}/linkedObjects/netfor/sessions?offset=0&limit=2000"
     __api_incident_netfor_alerts = "/api/incidents/{}/linkedObjects/netfor/alerts?offset=0&limit=2000"
 
+    __api_incident_status = "/api/incidents/{}/transitions"
+
     class TimeFilterType:
         CREATED = "creation"
         DETECTED = "detection"
@@ -236,6 +238,35 @@ class Incidents(ModuleInterface, LoggingHandler):
                       'hostname="{}"'.format(len(ret), incident_id, self.__core_hostname))
 
         return ret
+
+    def set_incident_status(self, incident_id: str, status: str, measures: str, message: str):
+        """
+        Установить статус инцидента, информацию о принятых мерах и комментарии.
+
+        :param incident_id: ID инцидента. Key (INC-<Number>) != ID
+        :param status: статус инцидента
+        :param measures: информация о принятых мерах
+        :param message: комментарий о причине изменения статуса
+        :return: Перечень свойств инцидента
+        """
+        api_url = self.__api_incident_status.format(incident_id)
+        url = "https://{}{}".format(self.__core_hostname, api_url)
+        params = {
+            "id": status,           # "Closed",
+            "measures": measures,   # "меры не предпринимались",
+            "message": message      # "легитимные действия",
+        }
+        response = exec_request(self.__core_session,
+                          url,
+                          method="PUT",
+                          timeout=self.settings.connection_timeout,
+                          json=params)
+        if hasattr(response, "status_code") and response.status_code == 204:
+            return True
+        else:
+            return False
+
+
 
     def __load_comments(self, incident_id):
         """
