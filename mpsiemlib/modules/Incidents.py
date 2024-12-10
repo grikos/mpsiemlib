@@ -33,6 +33,7 @@ class Incidents(ModuleInterface, LoggingHandler):
     __api_incident_netfor_alerts = "/api/incidents/{}/linkedObjects/netfor/alerts?offset=0&limit=2000"
 
     __api_incident_status = "/api/incidents/{}/transitions"
+    __api_incident_update = "/api/incidents/{}"
 
     class TimeFilterType:
         CREATED = "creation"
@@ -266,7 +267,47 @@ class Incidents(ModuleInterface, LoggingHandler):
         else:
             return False
 
+    def set_incident_assignee(self, incident: dict, siemUserID: str):
+        # по какой-то причине формат данных, получаемых об инциденте отличается от формата, который
+        # нужно отправить при обновлении информации об инциденте
+        incident_update_params = incident
+        
+        targets = dict()
+        targets["groups"] = list(map(lambda x: x['id'], incident['targets']['groups']))
+        targets["assets"] = list(map(lambda x: x['id'], incident['targets']['assets']))
+        targets["networks"] = list(map(lambda x: x['id'], incident['targets']['networks']))
+        targets["addresses"] = list(map(lambda x: x['name'], incident['targets']['addresses']))
+        targets["others"] = list(map(lambda x: x['name'], incident['targets']['others']))
 
+        attackers = dict()
+        attackers["groups"] = list(map(lambda x: x['id'], incident['attackers']['groups']))
+        attackers["assets"] = list(map(lambda x: x['id'], incident['attackers']['assets']))
+        attackers["networks"] = list(map(lambda x: x['id'], incident['attackers']['networks']))
+        attackers["addresses"] = list(map(lambda x: x['name'], incident['attackers']['addresses']))
+        attackers["others"] = list(map(lambda x: x['name'], incident['attackers']['others']))
+
+        incident_update_params["targets"] = targets
+        incident_update_params["attackers"] = attackers
+        if 'groups' in incident:
+            incident_update_params["groups"] = list(map(lambda x: x['id'], incident['groups']))
+        incident_update_params["assigned"] = siemUserID
+        incident_update_params["modified"] = incident['modification_history'] # todo: поменять везде на modified?
+        incident_update_params["correlationRules"] = []
+
+        self.__update_incident(incident_update_params)
+
+    def __update_incident(self, incident_update_params):
+        api_url = self.__api_incident_update.format(incident_update_params['id'])
+        url = "https://{}{}".format(self.__core_hostname, api_url)
+        response = exec_request(self.__core_session,
+                                url,
+                                method="PUT",
+                                timeout=self.settings.connection_timeout,
+                                json=incident_update_params)
+        if hasattr(response, "status_code") and response.status_code == 204:
+            return True
+        else:
+            return False        
 
     def __load_comments(self, incident_id):
         """
